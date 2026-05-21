@@ -1,25 +1,29 @@
 package com.example.luminance.ui.hazard
 
+import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
+import android.content.Intent
+import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Bundle
 import android.view.View
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.ImageButton
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.example.luminance.R
 import com.example.luminance.ui.settings.SettingsActivity
+import com.example.luminance.ui.vision.DetectionRepository
+import com.example.luminance.ui.vision.DetectionResult
 import com.example.luminance.ui.vision.VisionActivity
 import com.google.android.material.bottomnavigation.BottomNavigationView
-import android.content.Intent
-import android.animation.AnimatorSet
-import android.animation.ValueAnimator
-import android.view.animation.AccelerateDecelerateInterpolator
 
 class HazardActivity : AppCompatActivity() {
 
-    // ── HA-002: 퀵 액션 토글 상태 ───────────────────────────────
     private var ttsEnabled = true
     private var hapticEnabled = true
 
@@ -27,60 +31,165 @@ class HazardActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_hazard)
         setupPulseDot()
-        setupQuickActions()   // HA-002
-        setupMapView()        // HA-005
-        setupBottomNav()      // 네비게이션 수정
+        setupQuickActions()
+        setupMapView()
+        setupBottomNav()
+        setupHazardCards()  // ← 실시간 탐지 결과 카드
     }
 
-    // ── HA-002: 퀵 액션 버튼 (TTS / 햅틱 토글) ─────────────────
+    // ← 이거 추가
+    override fun onResume() {
+        super.onResume()
+        DetectionRepository.detections.observe(this) { detections ->
+            setupHazardCards()
+            setupMapView()
+        }
+    }
+
+    private fun setupHazardCards() {
+        val detections = DetectionRepository.latestDetections
+        val container = findViewById<LinearLayout>(R.id.hazardCardContainer)
+        val tvCount = findViewById<TextView>(R.id.tvHazardCount)
+
+        container.removeAllViews()
+
+        if (detections.isEmpty()) {
+            tvCount.text = "탐지된 위험 요소 없음"
+            val tv = TextView(this).apply {
+                text = "현재 주변에 위험 요소가 없습니다."
+                textSize = 15f
+                setTextColor(Color.parseColor("#414754"))
+                setPadding(16.dpToPx(), 16.dpToPx(), 16.dpToPx(), 16.dpToPx())
+            }
+            container.addView(tv)
+            return
+        }
+
+// 같은 클래스는 가장 가까운 것 하나만
+        val filtered = detections
+            .groupBy { it.className }
+            .map { (_, list) -> list.minByOrNull { it.depthM }!! }
+            .sortedBy { it.depthM }
+
+        tvCount.text = "${detections.size}개의 위험 요소 탐지됨"
+
+        for (det in detections) {
+            val level = when {
+                det.depthM in 0f..1.5f -> "즉시 대응"
+                det.depthM in 1.5f..3f -> "가까움"
+                else -> "전방"
+            }
+            val borderColor = when (level) {
+                "즉시 대응" -> "#BA1A1A"
+                "가까움" -> "#9A4100"
+                else -> "#0059BA"
+            }
+            val direction = when {
+                det.centerX < 0.33f -> "왼쪽"
+                det.centerX > 0.66f -> "오른쪽"
+                else -> "전방"
+            }
+
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = 12.dpToPx() }
+                setBackgroundResource(R.drawable.bg_hazard_card)
+            }
+
+            val border = View(this).apply {
+                layoutParams = LinearLayout.LayoutParams(6.dpToPx(), LinearLayout.LayoutParams.MATCH_PARENT)
+                setBackgroundColor(Color.parseColor(borderColor))
+            }
+
+            val inner = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+                setPadding(16.dpToPx(), 16.dpToPx(), 16.dpToPx(), 16.dpToPx())
+            }
+
+            val badge = TextView(this).apply {
+                text = level
+                textSize = 11f
+                setTextColor(Color.parseColor(borderColor))
+                setTypeface(null, Typeface.BOLD)
+                setPadding(12.dpToPx(), 4.dpToPx(), 12.dpToPx(), 4.dpToPx())
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = 6.dpToPx() }
+            }
+
+            val title = TextView(this).apply {
+                text = det.className
+                textSize = 20f
+                setTextColor(Color.parseColor("#191C1D"))
+                setTypeface(null, Typeface.BOLD)
+            }
+
+            val desc = TextView(this).apply {
+                text = "$direction 방향, ${"%.1f".format(det.depthM)}m 거리"
+                textSize = 15f
+                setTextColor(Color.parseColor("#414754"))
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = 4.dpToPx() }
+            }
+
+            inner.addView(badge)
+            inner.addView(title)
+            inner.addView(desc)
+            card.addView(border)
+            card.addView(inner)
+            container.addView(card)
+        }
+    }
+
+    private fun Int.dpToPx(): Int = (this * resources.displayMetrics.density).toInt()
+
     private fun setupQuickActions() {
-        val btnTts    = findViewById<ImageButton>(R.id.btnTtsToggle)
+        val btnTts = findViewById<ImageButton>(R.id.btnTtsToggle)
         val btnHaptic = findViewById<ImageButton>(R.id.btnHapticToggle)
 
         btnTts.setOnClickListener {
             ttsEnabled = !ttsEnabled
             updateTtsButton(btnTts)
-            val msg = if (ttsEnabled) "음성 안내 켜짐" else "음성 안내 꺼짐"
-            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-            // TODO: TtsManager.setEnabled(ttsEnabled)
+            Toast.makeText(this, if (ttsEnabled) "음성 안내 켜짐" else "음성 안내 꺼짐", Toast.LENGTH_SHORT).show()
         }
 
         btnHaptic.setOnClickListener {
             hapticEnabled = !hapticEnabled
             updateHapticButton(btnHaptic)
-            val msg = if (hapticEnabled) "진동 피드백 켜짐" else "진동 피드백 꺼짐"
-            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-            // TODO: HapticManager.setEnabled(hapticEnabled)
+            Toast.makeText(this, if (hapticEnabled) "진동 피드백 켜짐" else "진동 피드백 꺼짐", Toast.LENGTH_SHORT).show()
         }
 
-        // 초기 상태 반영
         updateTtsButton(btnTts)
         updateHapticButton(btnHaptic)
     }
 
     private fun updateTtsButton(btn: ImageButton) {
-        val iconRes = if (ttsEnabled) R.drawable.ic_volume_on else R.drawable.ic_volume_off
-        val tint    = if (ttsEnabled) R.color.md_primary else R.color.md_on_surface_variant
-        btn.setImageResource(iconRes)
-        btn.imageTintList = ContextCompat.getColorStateList(this, tint)
+        btn.setImageResource(if (ttsEnabled) R.drawable.ic_volume_on else R.drawable.ic_volume_off)
+        btn.imageTintList = ContextCompat.getColorStateList(this, if (ttsEnabled) R.color.md_primary else R.color.md_on_surface_variant)
         btn.alpha = if (ttsEnabled) 1f else 0.5f
     }
 
     private fun updateHapticButton(btn: ImageButton) {
-        val iconRes = if (hapticEnabled) R.drawable.ic_vibration_on else R.drawable.ic_vibration_off
-        val tint    = if (hapticEnabled) R.color.md_primary else R.color.md_on_surface_variant
-        btn.setImageResource(iconRes)
-        btn.imageTintList = ContextCompat.getColorStateList(this, tint)
+        btn.setImageResource(if (hapticEnabled) R.drawable.ic_vibration_on else R.drawable.ic_vibration_off)
+        btn.imageTintList = ContextCompat.getColorStateList(this, if (hapticEnabled) R.color.md_primary else R.color.md_on_surface_variant)
         btn.alpha = if (hapticEnabled) 1f else 0.5f
     }
 
-    // ── 실시간 분석 펄스 점 애니메이션 ──────────────────────────
     private fun setupPulseDot() {
         val dot = findViewById<View>(R.id.pulseDot)
-        val scaleX = ObjectAnimator.ofFloat(dot, "scaleX", 1f, 1.4f, 1f).apply{repeatCount=ValueAnimator.INFINITE}
-        val scaleY = ObjectAnimator.ofFloat(dot, "scaleY", 1f, 1.4f, 1f).apply{repeatCount=ValueAnimator.INFINITE}
-        val alpha  = ObjectAnimator.ofFloat(dot, "alpha", 1f, 0.4f, 1f).apply{repeatCount=ValueAnimator.INFINITE}
-
+        val scaleX = ObjectAnimator.ofFloat(dot, "scaleX", 1f, 1.4f, 1f).apply { repeatCount = ValueAnimator.INFINITE }
+        val scaleY = ObjectAnimator.ofFloat(dot, "scaleY", 1f, 1.4f, 1f).apply { repeatCount = ValueAnimator.INFINITE }
+        val alpha = ObjectAnimator.ofFloat(dot, "alpha", 1f, 0.4f, 1f).apply { repeatCount = ValueAnimator.INFINITE }
         AnimatorSet().apply {
             playTogether(scaleX, scaleY, alpha)
             duration = 1200
@@ -89,95 +198,55 @@ class HazardActivity : AppCompatActivity() {
         }
     }
 
-    // ── HA-005: CustomMapView 핀 설정 ────────────────────────────
     private fun setupMapView() {
         val mapView = findViewById<CustomMapView>(R.id.customMapView)
+        val detections = DetectionRepository.latestDetections
 
-        val pins = listOf(
+        val pins = detections.mapIndexed { i, det ->
             CustomMapView.HazardPin(
-                id = "1", label = "열려 있는 맨홀", detail = "경로상에 있습니다. 멈춰서 왼쪽으로 우회하세요.",
-                level = CustomMapView.HazardLevel.IMMEDIATE,
-                relX = 0.15f, relY = -0.25f
-            ),
-            CustomMapView.HazardPin(
-                id = "2", label = "빠른 자전거", detail = "2시 방향에서 접근 중. 빠르게 이동 중.",
-                level = CustomMapView.HazardLevel.NEAR,
-                relX = 0.45f, relY = 0.10f
-            ),
-            CustomMapView.HazardPin(
-                id = "3", label = "계단 아래", detail = "앞에 지하철 입구. 점자 블록 있음.",
-                level = CustomMapView.HazardLevel.AHEAD,
-                relX = -0.10f, relY = 0.50f
+                id = "$i",
+                label = det.className,
+                detail = "${"%.1f".format(det.depthM)}m 거리",
+                level = when {
+                    det.depthM in 0f..1.5f -> CustomMapView.HazardLevel.IMMEDIATE
+                    det.depthM in 1.5f..3f -> CustomMapView.HazardLevel.NEAR
+                    else -> CustomMapView.HazardLevel.AHEAD
+                },
+                relX = det.centerX - 0.5f,
+                relY = det.centerY - 0.5f
             )
-        )
-
-        mapView.setPins(pins)
-
-        // 핀 탭 → 해당 위험 카드 강조 or 토스트
-        mapView.setOnPinTappedListener { pin ->
-            Toast.makeText(this, "${pin.label}: ${pin.detail}", Toast.LENGTH_LONG).show()
-            // TODO: 해당 카드로 스크롤 이동
         }
 
-        // 확대 버튼 → 전체화면 지도 (추후 FullMapActivity로 전환)
+        mapView.setPins(pins)
+        mapView.setOnPinTappedListener { pin ->
+            Toast.makeText(this, "${pin.label}: ${pin.detail}", Toast.LENGTH_LONG).show()
+        }
+
         findViewById<View>(R.id.btnExpandMap).setOnClickListener {
             Toast.makeText(this, "전체 지도 보기 (준비 중)", Toast.LENGTH_SHORT).show()
         }
     }
 
-    // ── 하단 네비게이션 ─────────────────────────────────────────
-    /**
-     * 핵심 수정 포인트:
-     * - 각 Activity에서 setSelectedItemId()로 현재 탭을 표시
-     * - Intent에 FLAG_ACTIVITY_REORDER_TO_FRONT 사용 → 백스택 중복 방지
-     * - HazardActivity 자신 탭은 아무 동작 안 함 (중복 생성 방지)
-     */
     private fun setupBottomNav() {
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottomNav)
-
-        // 현재 화면 탭 선택 표시
         bottomNav.selectedItemId = R.id.nav_hazard
-
         bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
-                R.id.nav_hazard -> {
-                    // 현재 화면 — 아무 동작 없음
-                    true
-                }
+                R.id.nav_hazard -> true
                 R.id.nav_vision -> {
-                    startActivity(
-                        Intent(this, VisionActivity::class.java).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                        }
-                    )
-                    if (android.os.Build.VERSION.SDK_INT >= 34) {
-                        overrideActivityTransition(
-                            OVERRIDE_TRANSITION_OPEN,
-                            0,
-                            0
-                        )
-                    } else {
-                        @Suppress("DEPRECATION")
-                        overridePendingTransition(0, 0)
-                    } // 탭 전환 애니메이션 제거
+                    startActivity(Intent(this, VisionActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                    })
+                    @Suppress("DEPRECATION")
+                    overridePendingTransition(0, 0)
                     true
                 }
                 R.id.nav_settings -> {
-                    startActivity(
-                        Intent(this, SettingsActivity::class.java).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                        }
-                    )
-                    if (android.os.Build.VERSION.SDK_INT >= 34) {
-                        overrideActivityTransition(
-                            OVERRIDE_TRANSITION_OPEN,
-                            0,
-                            0
-                        )
-                    } else {
-                        @Suppress("DEPRECATION")
-                        overridePendingTransition(0, 0)
-                    }
+                    startActivity(Intent(this, SettingsActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                    })
+                    @Suppress("DEPRECATION")
+                    overridePendingTransition(0, 0)
                     true
                 }
                 else -> false

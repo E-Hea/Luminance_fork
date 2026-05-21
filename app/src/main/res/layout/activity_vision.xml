@@ -16,7 +16,7 @@
         android:layout_height="match_parent" />
 
     <!--오버레이 레이어 (탐지 박스 그리기용 커스텀뷰)-->
-    <com.example.luminance.ui.DetectionOverlayView
+    <com.example.luminance.ui.vision.DetectionOverlayView
         android:id="@+id/detectionOverlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />

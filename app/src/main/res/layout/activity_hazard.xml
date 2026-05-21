@@ -114,6 +114,7 @@
                     android:letterSpacing="0.15" />
 
                 <TextView
+                    android:id="@+id/tvHazardCount"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
@@ -134,161 +135,168 @@
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
-            <!-- HA-003: 위험 카드 1 - 즉시 대응 (빨간) -->
+            <!-- 동적 카드 컨테이너 -->
             <LinearLayout
+                android:id="@+id/hazardCardContainer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:background="@drawable/bg_hazard_card_red"
-                android:orientation="horizontal">
+                android:orientation="vertical" />
 
-                <View
-                    android:layout_width="6dp"
-                    android:layout_height="match_parent"
-                    android:background="#BA1A1A" />
+<!--            &lt;!&ndash; HA-003: 위험 카드 1 - 즉시 대응 (빨간) &ndash;&gt;-->
+<!--            <LinearLayout-->
+<!--                android:layout_width="match_parent"-->
+<!--                android:layout_height="wrap_content"-->
+<!--                android:layout_marginBottom="12dp"-->
+<!--                android:background="@drawable/bg_hazard_card_red"-->
+<!--                android:orientation="horizontal">-->
 
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
+<!--                <View-->
+<!--                    android:layout_width="6dp"-->
+<!--                    android:layout_height="match_parent"-->
+<!--                    android:background="#BA1A1A" />-->
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="6dp"
-                        android:background="@drawable/bg_badge_red"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="12dp"
-                        android:paddingTop="4dp"
-                        android:paddingBottom="4dp"
-                        android:text="즉시 대응"
-                        android:textColor="#93000A"
-                        android:textSize="11sp"
-                        android:textStyle="bold" />
+<!--                <LinearLayout-->
+<!--                    android:layout_width="match_parent"-->
+<!--                    android:layout_height="wrap_content"-->
+<!--                    android:orientation="vertical"-->
+<!--                    android:padding="16dp">-->
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="열려 있는 맨홀"
-                        android:textColor="#191C1D"
-                        android:textSize="20sp"
-                        android:textStyle="bold" />
+<!--                    <TextView-->
+<!--                        android:layout_width="wrap_content"-->
+<!--                        android:layout_height="wrap_content"-->
+<!--                        android:layout_marginBottom="6dp"-->
+<!--                        android:background="@drawable/bg_badge_red"-->
+<!--                        android:paddingStart="12dp"-->
+<!--                        android:paddingEnd="12dp"-->
+<!--                        android:paddingTop="4dp"-->
+<!--                        android:paddingBottom="4dp"-->
+<!--                        android:text="즉시 대응"-->
+<!--                        android:textColor="#93000A"-->
+<!--                        android:textSize="11sp"-->
+<!--                        android:textStyle="bold" />-->
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="경로상에 있습니다. 멈춰서 왼쪽으로 우회하세요."
-                        android:textColor="#414754"
-                        android:textSize="15sp"
-                        android:lineSpacingExtra="4dp" />
-                </LinearLayout>
-            </LinearLayout>
+<!--                    <TextView-->
+<!--                        android:layout_width="wrap_content"-->
+<!--                        android:layout_height="wrap_content"-->
+<!--                        android:text="열려 있는 맨홀"-->
+<!--                        android:textColor="#191C1D"-->
+<!--                        android:textSize="20sp"-->
+<!--                        android:textStyle="bold" />-->
 
-            <!-- HA-003: 위험 카드 2 - 가까움 (주황) -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:background="@drawable/bg_hazard_card"
-                android:orientation="horizontal">
+<!--                    <TextView-->
+<!--                        android:layout_width="wrap_content"-->
+<!--                        android:layout_height="wrap_content"-->
+<!--                        android:layout_marginTop="4dp"-->
+<!--                        android:text="경로상에 있습니다. 멈춰서 왼쪽으로 우회하세요."-->
+<!--                        android:textColor="#414754"-->
+<!--                        android:textSize="15sp"-->
+<!--                        android:lineSpacingExtra="4dp" />-->
+<!--                </LinearLayout>-->
+<!--            </LinearLayout>-->
 
-                <View
-                    android:layout_width="6dp"
-                    android:layout_height="match_parent"
-                    android:background="#9A4100" />
+<!--            &lt;!&ndash; HA-003: 위험 카드 2 - 가까움 (주황) &ndash;&gt;-->
+<!--            <LinearLayout-->
+<!--                android:layout_width="match_parent"-->
+<!--                android:layout_height="wrap_content"-->
+<!--                android:layout_marginBottom="12dp"-->
+<!--                android:background="@drawable/bg_hazard_card"-->
+<!--                android:orientation="horizontal">-->
 
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
+<!--                <View-->
+<!--                    android:layout_width="6dp"-->
+<!--                    android:layout_height="match_parent"-->
+<!--                    android:background="#9A4100" />-->
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="6dp"
-                        android:background="@drawable/bg_badge_orange"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="12dp"
-                        android:paddingTop="4dp"
-                        android:paddingBottom="4dp"
-                        android:text="가까움"
-                        android:textColor="#341100"
-                        android:textSize="11sp"
-                        android:textStyle="bold" />
+<!--                <LinearLayout-->
+<!--                    android:layout_width="match_parent"-->
+<!--                    android:layout_height="wrap_content"-->
+<!--                    android:orientation="vertical"-->
+<!--                    android:padding="16dp">-->
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="빠른 자전거"
-                        android:textColor="#191C1D"
-                        android:textSize="20sp"
-                        android:textStyle="bold" />
+<!--                    <TextView-->
+<!--                        android:layout_width="wrap_content"-->
+<!--                        android:layout_height="wrap_content"-->
+<!--                        android:layout_marginBottom="6dp"-->
+<!--                        android:background="@drawable/bg_badge_orange"-->
+<!--                        android:paddingStart="12dp"-->
+<!--                        android:paddingEnd="12dp"-->
+<!--                        android:paddingTop="4dp"-->
+<!--                        android:paddingBottom="4dp"-->
+<!--                        android:text="가까움"-->
+<!--                        android:textColor="#341100"-->
+<!--                        android:textSize="11sp"-->
+<!--                        android:textStyle="bold" />-->
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="2시 방향에서 접근 중. 빠르게 이동 중."
-                        android:textColor="#414754"
-                        android:textSize="15sp"
-                        android:lineSpacingExtra="4dp" />
-                </LinearLayout>
-            </LinearLayout>
+<!--                    <TextView-->
+<!--                        android:layout_width="wrap_content"-->
+<!--                        android:layout_height="wrap_content"-->
+<!--                        android:text="빠른 자전거"-->
+<!--                        android:textColor="#191C1D"-->
+<!--                        android:textSize="20sp"-->
+<!--                        android:textStyle="bold" />-->
 
-            <!-- HA-003: 위험 카드 3 - 전방 (파란) -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="24dp"
-                android:background="@drawable/bg_hazard_card"
-                android:orientation="horizontal">
+<!--                    <TextView-->
+<!--                        android:layout_width="wrap_content"-->
+<!--                        android:layout_height="wrap_content"-->
+<!--                        android:layout_marginTop="4dp"-->
+<!--                        android:text="2시 방향에서 접근 중. 빠르게 이동 중."-->
+<!--                        android:textColor="#414754"-->
+<!--                        android:textSize="15sp"-->
+<!--                        android:lineSpacingExtra="4dp" />-->
+<!--                </LinearLayout>-->
+<!--            </LinearLayout>-->
 
-                <View
-                    android:layout_width="6dp"
-                    android:layout_height="match_parent"
-                    android:background="#0059BA" />
+<!--            &lt;!&ndash; HA-003: 위험 카드 3 - 전방 (파란) &ndash;&gt;-->
+<!--            <LinearLayout-->
+<!--                android:layout_width="match_parent"-->
+<!--                android:layout_height="wrap_content"-->
+<!--                android:layout_marginBottom="24dp"-->
+<!--                android:background="@drawable/bg_hazard_card"-->
+<!--                android:orientation="horizontal">-->
 
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
+<!--                <View-->
+<!--                    android:layout_width="6dp"-->
+<!--                    android:layout_height="match_parent"-->
+<!--                    android:background="#0059BA" />-->
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="6dp"
-                        android:background="@drawable/bg_badge_blue"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="12dp"
-                        android:paddingTop="4dp"
-                        android:paddingBottom="4dp"
-                        android:text="전방"
-                        android:textColor="#001F29"
-                        android:textSize="11sp"
-                        android:textStyle="bold" />
+<!--                <LinearLayout-->
+<!--                    android:layout_width="match_parent"-->
+<!--                    android:layout_height="wrap_content"-->
+<!--                    android:orientation="vertical"-->
+<!--                    android:padding="16dp">-->
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="계단 아래"
-                        android:textColor="#191C1D"
-                        android:textSize="20sp"
-                        android:textStyle="bold" />
+<!--                    <TextView-->
+<!--                        android:layout_width="wrap_content"-->
+<!--                        android:layout_height="wrap_content"-->
+<!--                        android:layout_marginBottom="6dp"-->
+<!--                        android:background="@drawable/bg_badge_blue"-->
+<!--                        android:paddingStart="12dp"-->
+<!--                        android:paddingEnd="12dp"-->
+<!--                        android:paddingTop="4dp"-->
+<!--                        android:paddingBottom="4dp"-->
+<!--                        android:text="전방"-->
+<!--                        android:textColor="#001F29"-->
+<!--                        android:textSize="11sp"-->
+<!--                        android:textStyle="bold" />-->
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="앞에 지하철 입구. 점자 블록 있음."
-                        android:textColor="#414754"
-                        android:textSize="15sp"
-                        android:lineSpacingExtra="4dp" />
-                </LinearLayout>
-            </LinearLayout>
+<!--                    <TextView-->
+<!--                        android:layout_width="wrap_content"-->
+<!--                        android:layout_height="wrap_content"-->
+<!--                        android:text="계단 아래"-->
+<!--                        android:textColor="#191C1D"-->
+<!--                        android:textSize="20sp"-->
+<!--                        android:textStyle="bold" />-->
+
+<!--                    <TextView-->
+<!--                        android:layout_width="wrap_content"-->
+<!--                        android:layout_height="wrap_content"-->
+<!--                        android:layout_marginTop="4dp"-->
+<!--                        android:text="앞에 지하철 입구. 점자 블록 있음."-->
+<!--                        android:textColor="#414754"-->
+<!--                        android:textSize="15sp"-->
+<!--                        android:lineSpacingExtra="4dp" />-->
+<!--                </LinearLayout>-->
+<!--            </LinearLayout>-->
 
             <!-- HA-005: 주변 위험 지도 섹션 -->
             <LinearLayout
