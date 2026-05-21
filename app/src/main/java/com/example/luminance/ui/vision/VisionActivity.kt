@@ -1,150 +1,283 @@
 package com.example.luminance.ui.vision
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.provider.Settings
+import android.speech.tts.TextToSpeech
+import android.util.Size
 import android.view.LayoutInflater
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.camera.core.*
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.core.content.ContextCompat
 import com.example.luminance.R
 import com.example.luminance.databinding.ActivityVisionBinding
 import com.example.luminance.ui.hazard.HazardActivity
 import com.example.luminance.ui.settings.SettingsActivity
 import com.google.android.material.bottomnavigation.BottomNavigationView
-import android.Manifest
-import android.content.pm.PackageManager
-import android.net.Uri
-import android.os.Build
-import android.provider.Settings
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
-import androidx.core.content.ContextCompat
+import java.util.Locale
+import java.util.concurrent.Executors
 
-/**
- * VisionActivity
- *
- * 시각 보조 화면 - 카메라 프리뷰 위에 실시간 안내 텍스트 카드를 표시한다.
- * 접근성 기준: 최소 18sp 이상 폰트, 고대비 색상 (#191C1D on #FFFFFF)
- *
- * 현재: 더미 안내 문구 표시
- * 추후: InferenceManager / DepthManager 결과를 받아 실시간 갱신
- */
 class VisionActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityVisionBinding
-
-    // 더미 안내 문구 목록 (추후 AI 추론 결과로 교체)
-    private val guidanceMessages = listOf(
-        "오른쪽에서 자전거가 빠르게 접근 중입니다",
-        "전방 2미터에 계단이 있습니다",
-        "왼쪽에 사람이 서 있습니다",
-        "전방이 안전합니다. 계속 진행하세요",
-        "신호등이 빨간불입니다. 멈춰 주세요"
-    )
-
-    private var currentMessageIndex = 0
+    private lateinit var tts: TextToSpeech
+    private lateinit var detector: YoloDetector
+    private lateinit var vibrator: Vibrator
+    private val inferenceExecutor = Executors.newSingleThreadExecutor()
+    private var isProcessing = false
+    private var lastSpokenTime = 0L
+    private var lastVibrationTime = 0L
+    private val TTS_COOLDOWN_MS = 3000L
+    private val VIBRATION_COOLDOWN_MS = 3000L
+    private var isCameraStarted = false
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
-
-    // 안내 문구 자동 순환 Runnable (실제 구현에서는 AI 결과로 교체)
-    private val cycleRunnable = object : Runnable {
-        override fun run() {
-            updateGuidanceText(guidanceMessages[currentMessageIndex])
-            currentMessageIndex = (currentMessageIndex + 1) % guidanceMessages.size
-            handler.postDelayed(this, 3000L) // 3초마다 갱신
-        }
-    }
-
-    // ───────────────────────────────────────────────────────────
-    // Lifecycle
-    // ───────────────────────────────────────────────────────────
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityVisionBinding.inflate(LayoutInflater.from(this))
         setContentView(binding.root)
-        checkAndRequestPermissions()
 
+        vibrator = getSystemService(VIBRATOR_SERVICE) as Vibrator
+
+        checkAndRequestPermissions()
         setupBottomNav()
         setupMicButton()
-        startGuidanceCycle()
 
-        // TODO: CameraX 프리뷰 연결
-        // setupCamera()
+        tts = TextToSpeech(this) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                tts.language = Locale.KOREAN
+            }
+        }
 
-        // TODO: 실제 AI 추론 결과 연동
-        // inferenceManager.result.observe(this) { result ->
-        //     updateGuidanceText(result.guidanceMessage)
-        // }
-
+        detector = YoloDetector(this)
     }
 
-    override fun onResume() {
-        super.onResume()
-        handler.post(cycleRunnable)
+    private fun checkAndRequestPermissions() {
+        val denied = permissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (denied.isEmpty()) {
+            setupCamera()
+            return
+        }
+
+        val needsRationale = denied.any { shouldShowRequestPermissionRationale(it) }
+
+        if (needsRationale) {
+            AlertDialog.Builder(this)
+                .setTitle("권한이 필요합니다")
+                .setMessage(buildRationaleMessage(denied))
+                .setPositiveButton("허용하기") { _, _ ->
+                    permissionLauncher.launch(denied.toTypedArray())
+                }
+                .setNegativeButton("취소", null)
+                .show()
+        } else {
+            permissionLauncher.launch(denied.toTypedArray())
+        }
     }
 
-    override fun onPause() {
-        super.onPause()
-        handler.removeCallbacks(cycleRunnable)
+    private fun buildRationaleMessage(denied: List<String>): String {
+        return buildString {
+            if (Manifest.permission.CAMERA in denied)
+                append("• 카메라: 전방 위험 감지에 필요합니다.\n")
+            if (Manifest.permission.RECORD_AUDIO in denied)
+                append("• 마이크: 음성 명령 기능에 필요합니다.\n")
+            if (Manifest.permission.ACCESS_FINE_LOCATION in denied)
+                append("• 위치: 길 안내 기능에 필요합니다.\n")
+        }.trimEnd()
     }
 
-    // ───────────────────────────────────────────────────────────
-    // 실시간 안내 텍스트 업데이트
-    // ───────────────────────────────────────────────────────────
+    private val permissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+            val denied = result.filterValues { !it }.keys
 
-    /**
-     * 안내 카드의 텍스트를 갱신한다.
-     * 접근성: 18sp 이상, 고대비(#191C1D on #FFFFFF) 는 XML에서 보장
-     * TalkBack 을 위해 contentDescription 도 함께 갱신
-     */
+            if (denied.isEmpty()) {
+                setupCamera()
+                return@registerForActivityResult
+            }
+
+            if (Manifest.permission.CAMERA in denied) {
+                updateGuidanceText("카메라 권한이 없어 감지 기능을 사용할 수 없습니다.")
+            } else {
+                setupCamera()
+            }
+
+            val permanentlyDenied = denied.filter { !shouldShowRequestPermissionRationale(it) }
+            if (permanentlyDenied.isNotEmpty()) {
+                showGoToSettingsDialog(permanentlyDenied.toSet())
+            }
+        }
+
+    private fun showGoToSettingsDialog(denied: Set<String>) {
+        AlertDialog.Builder(this)
+            .setTitle("권한 설정 필요")
+            .setMessage(
+                "일부 권한이 차단되어 설정에서 직접 허용해야 합니다.\n\n" +
+                        buildRationaleMessage(denied.toList())
+            )
+            .setPositiveButton("설정으로 이동") { _, _ ->
+                startActivity(
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.fromParts("package", packageName, null))
+                )
+            }
+            .setNegativeButton("닫기", null)
+            .show()
+    }
+
+    private fun setupCamera() {
+        if (isCameraStarted) return
+        isCameraStarted = true
+
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+        cameraProviderFuture.addListener({
+            val cameraProvider = cameraProviderFuture.get()
+
+            val preview = Preview.Builder().build().also {
+                it.setSurfaceProvider(binding.cameraPreview.surfaceProvider)
+            }
+
+            val imageAnalysis = ImageAnalysis.Builder()
+                .setTargetResolution(Size(640, 480))
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build()
+
+            imageAnalysis.setAnalyzer(inferenceExecutor) { imageProxy ->
+                if (!isProcessing) {
+                    isProcessing = true
+                    processFrame(imageProxy)
+                } else {
+                    imageProxy.close()
+                }
+            }
+
+            cameraProvider.bindToLifecycle(
+                this,
+                CameraSelector.DEFAULT_BACK_CAMERA,
+                preview,
+                imageAnalysis
+            )
+        }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun processFrame(imageProxy: ImageProxy) {
+        android.util.Log.d("LUMINANCE", "processFrame 호출됨 - ${imageProxy.width}x${imageProxy.height}")
+
+        try {
+            val bitmap = imageProxy.toBitmap()
+            val detections = detector.detect(bitmap)
+            android.util.Log.d("LUMINANCE", "탐지 결과: ${detections.size}개")
+
+            DetectionRepository.detections.postValue(detections)
+
+            runOnUiThread {
+                binding.detectionOverlay.updateDetections(detections, bitmap.width, bitmap.height)
+                speakTopHazard(detections)
+                vibrateForHazard(detections)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("LUMINANCE", "추론 오류: ${e.message}", e)
+        } finally {
+            imageProxy.close()
+            isProcessing = false
+        }
+    }
+
+    // 진동 패턴: 즉시대응=3회, 가까움=2회, 전방=1회
+    private fun vibrateForHazard(detections: List<DetectionResult>) {
+        if (detections.isEmpty()) return
+
+        val now = System.currentTimeMillis()
+        if (now - lastVibrationTime < VIBRATION_COOLDOWN_MS) return
+
+        val top = detections.minByOrNull { it.depthM } ?: return
+
+        val pattern = when {
+            top.depthM < 1.5f -> longArrayOf(0, 200, 100, 200, 100, 200)  // 즉시대응: 3회
+            top.depthM < 3.0f -> longArrayOf(0, 200, 100, 200)             // 가까움: 2회
+            else -> longArrayOf(0, 200)                                      // 전방: 1회
+        }
+
+        vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
+        lastVibrationTime = now
+    }
+
+    private fun speakTopHazard(detections: List<DetectionResult>) {
+        if (detections.isEmpty()) return
+
+        val now = System.currentTimeMillis()
+        if (now - lastSpokenTime < TTS_COOLDOWN_MS) return
+
+        val top = detections.minByOrNull { it.depthM } ?: return
+
+        val direction = when {
+            top.centerX < 0.33f -> "왼쪽"
+            top.centerX > 0.66f -> "오른쪽"
+            else -> "전방"
+        }
+
+        val sentence = when {
+            top.depthM < 1.5f -> "${direction}에 ${top.className} 있습니다. 즉시 주의하세요."
+            top.depthM < 3.0f -> "${direction}에서 ${top.className}이 접근 중입니다."
+            else -> "전방에 ${top.className} 있습니다."
+        }
+
+        tts.speak(sentence, TextToSpeech.QUEUE_FLUSH, null, null)
+        lastSpokenTime = now
+        updateGuidanceText(sentence)
+    }
+
     fun updateGuidanceText(message: String) {
         binding.tvGuidanceText.text = message
         binding.tvGuidanceText.contentDescription = "실시간 안내: $message"
     }
 
-    // ───────────────────────────────────────────────────────────
-    // 더미 순환 시작
-    // ───────────────────────────────────────────────────────────
-
-    private fun startGuidanceCycle() {
-        // 첫 메시지 즉시 표시
-        updateGuidanceText(guidanceMessages[0])
+    override fun onResume() {
+        super.onResume()
+        if (!isCameraStarted &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+            == PackageManager.PERMISSION_GRANTED) {
+            setupCamera()
+        }
     }
 
-    // ───────────────────────────────────────────────────────────
-    // 하단 네비게이션
-    // ───────────────────────────────────────────────────────────
+    override fun onPause() {
+        super.onPause()
+        handler.removeCallbacks(handler.toString().let { { } })
+    }
 
-    // ── 하단 네비게이션 ─────────────────────────────────────────
-    /**
-     * 핵심 수정 포인트:
-     * - 각 Activity에서 setSelectedItemId()로 현재 탭을 표시
-     * - Intent에 FLAG_ACTIVITY_REORDER_TO_FRONT 사용 → 백스택 중복 방지
-     * - HazardActivity 자신 탭은 아무 동작 안 함 (중복 생성 방지)
-     */
+    override fun onDestroy() {
+        super.onDestroy()
+        tts.shutdown()
+        inferenceExecutor.shutdown()
+    }
+
     private fun setupBottomNav() {
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottomNav)
-
-        // 현재 화면 탭 선택 표시
         bottomNav.selectedItemId = R.id.nav_vision
-
         bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
                 R.id.nav_hazard -> {
-                    startActivity(
-                        Intent(this, HazardActivity::class.java).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                        }
-                    )
+                    startActivity(Intent(this, HazardActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                    })
                     true
                 }
-                R.id.nav_vision -> {
-                    true
-                }
+                R.id.nav_vision -> true
                 R.id.nav_settings -> {
-                    startActivity(
-                        Intent(this, SettingsActivity::class.java).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                        }
-                    )
+                    startActivity(Intent(this, SettingsActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                    })
                     overridePendingTransition(0, 0)
                     true
                 }
@@ -153,83 +286,67 @@ class VisionActivity : AppCompatActivity() {
         }
     }
 
-    // ───────────────────────────────────────────────────────────
-    // 마이크 버튼 (음성 명령 - 추후 구현)
-    // ───────────────────────────────────────────────────────────
-
     private fun setupMicButton() {
-        binding.btnMic.setOnClickListener {
-            // TODO: 음성 명령 인식 연동
+        binding.btnMic.setOnClickListener { startVoiceCommand() }
+        binding.fabMic.setOnClickListener { startVoiceCommand() }
+    }
+
+    private fun startVoiceCommand() {
+        val intent = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "ko-KR")
+            putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "말씀하세요...")
         }
-        binding.fabMic.setOnClickListener {
-            // TODO: 음성 명령 인식 연동
+        try {
+            voiceLauncher.launch(intent)
+        } catch (e: Exception) {
+            updateGuidanceText("음성 인식을 사용할 수 없습니다.")
         }
     }
+
+    private val voiceLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) {
+                val matches = result.data
+                    ?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)
+                val command = matches?.firstOrNull() ?: return@registerForActivityResult
+                handleVoiceCommand(command)
+            }
+        }
+
+    private fun handleVoiceCommand(command: String) {
+        android.util.Log.d("LUMINANCE", "음성 명령: $command")
+        val detections = DetectionRepository.latestDetections
+        val response = when {
+            command.contains("뭐") || command.contains("무엇") || command.contains("있") -> {
+                if (detections.isEmpty()) "주변에 탐지된 위험 요소가 없습니다."
+                else {
+                    val top = detections.minByOrNull { it.depthM }!!
+                    val direction = when {
+                        top.centerX < 0.33f -> "왼쪽"
+                        top.centerX > 0.66f -> "오른쪽"
+                        else -> "전방"
+                    }
+                    "$direction 에 ${top.className} 있습니다. 거리는 약 ${"%.1f".format(top.depthM)}미터입니다."
+                }
+            }
+            command.contains("위험") -> {
+                if (detections.isEmpty()) "현재 위험 요소가 없습니다."
+                else "${detections.size}개의 위험 요소가 탐지되었습니다."
+            }
+            command.contains("안전") -> "현재 전방을 분석 중입니다. 주의하며 이동하세요."
+            command.contains("멈춰") || command.contains("정지") -> "정지합니다. 주변을 확인하세요."
+            else -> "죄송합니다. 다시 말씀해 주세요."
+        }
+        tts.speak(response, TextToSpeech.QUEUE_FLUSH, null, null)
+        updateGuidanceText(response)
+    }
+
 
     private val permissions = arrayOf(
         Manifest.permission.CAMERA,
         Manifest.permission.RECORD_AUDIO,
         Manifest.permission.ACCESS_FINE_LOCATION
     )
-
-    private val permissionLauncher =
-        registerForActivityResult(
-            ActivityResultContracts.RequestMultiplePermissions()
-        ) { result ->
-
-            val deniedPermissions = result.filterValues { !it }.keys
-
-            if (deniedPermissions.isNotEmpty()) {
-                showPermissionDialog(deniedPermissions)
-            }
-        }
-
-    private fun checkAndRequestPermissions() {
-
-        val deniedPermissions = permissions.filter {
-            ContextCompat.checkSelfPermission(
-                this,
-                it
-            ) != PackageManager.PERMISSION_GRANTED
-        }
-
-        if (deniedPermissions.isNotEmpty()) {
-            permissionLauncher.launch(deniedPermissions.toTypedArray())
-        }
-    }
-
-    private fun showPermissionDialog(deniedPermissions: Set<String>) {
-
-        val message = buildString {
-
-            if (Manifest.permission.CAMERA in deniedPermissions) {
-                append("• 카메라 권한이 없어 전방 위험 감지가 제한됩니다.\n")
-            }
-
-            if (Manifest.permission.RECORD_AUDIO in deniedPermissions) {
-                append("• 마이크 권한이 없어 음성 기능이 제한됩니다.\n")
-            }
-
-            if (Manifest.permission.ACCESS_FINE_LOCATION in deniedPermissions) {
-                append("• 위치 권한이 없어 길 안내 기능이 제한됩니다.\n")
-            }
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle("권한 필요")
-            .setMessage(message)
-            .setPositiveButton("설정으로 이동") { _, _ ->
-
-                val intent = Intent(
-                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                    Uri.fromParts("package", packageName, null)
-                )
-
-                startActivity(intent)
-            }
-            .setNegativeButton("닫기", null)
-            .show()
-    }
-
-
 }

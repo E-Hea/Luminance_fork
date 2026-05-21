@@ -76,4 +76,21 @@ dependencies {
     implementation("androidx.camera:camera-camera2:1.3.4")
     implementation("androidx.camera:camera-lifecycle:1.3.4")
     implementation("androidx.camera:camera-view:1.3.4")
+
+    //은혜 추가
+    dependencies {
+        // 기존 코드 유지하고 아래만 추가
+
+        // CameraX
+        implementation("androidx.camera:camera-camera2:1.3.4")
+        implementation("androidx.camera:camera-lifecycle:1.3.4")
+        implementation("androidx.camera:camera-view:1.3.4")
+
+        // TFLite
+        implementation("org.tensorflow:tensorflow-lite:2.13.0")
+        implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+
+        // ARCore
+        implementation("com.google.ar:core:1.40.0")
+    }
 }
