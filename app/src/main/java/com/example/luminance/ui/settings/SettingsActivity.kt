@@ -276,38 +276,26 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
      */
     private fun setupBottomNav() {
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottomNav)
-
-        // 현재 화면 탭 선택 표시
-        bottomNav.selectedItemId = R.id.nav_settings
+        bottomNav.menu.findItem(R.id.nav_settings)?.isChecked = true
 
         bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
+                R.id.nav_settings -> true  // 현재 화면, 이동 없음
+
                 R.id.nav_hazard -> {
-                    startActivity(
-                        Intent(this, HazardActivity::class.java).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                        }
-                    )
+                    startActivity(Intent(this, HazardActivity::class.java))
+                    overridePendingTransition(0, 0)  // 애니메이션 제거
+                    finish()  // 뒤로가기 스택 정리
                     true
                 }
+
                 R.id.nav_vision -> {
-                    startActivity(
-                        Intent(this, VisionActivity::class.java).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                        }
-                    )
-                    overridePendingTransition(0, 0) // 탭 전환 애니메이션 제거
-                    true
-                }
-                R.id.nav_settings -> {
-                    startActivity(
-                        Intent(this, SettingsActivity::class.java).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                        }
-                    )
+                    startActivity(Intent(this, VisionActivity::class.java))
                     overridePendingTransition(0, 0)
+                    finish()
                     true
                 }
+
                 else -> false
             }
         }

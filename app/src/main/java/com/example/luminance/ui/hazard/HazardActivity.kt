@@ -20,21 +20,37 @@ import com.example.luminance.ui.settings.SettingsActivity
 import com.example.luminance.ui.vision.DetectionRepository
 import com.example.luminance.ui.vision.DetectionResult
 import com.example.luminance.ui.vision.VisionActivity
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.GoogleMap
+import com.google.android.gms.maps.MapView
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.MarkerOptions
 import com.google.android.material.bottomnavigation.BottomNavigationView
-
+import com.example.luminance.ui.hazard.FullMapActivity
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.app.ActivityCompat
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
 class HazardActivity : AppCompatActivity() {
 
     private var ttsEnabled = true
     private var hapticEnabled = true
+    private lateinit var mapView: MapView
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_hazard)
         setupPulseDot()
         setupQuickActions()
-        setupMapView()
         setupBottomNav()
         setupHazardCards()  // ← 실시간 탐지 결과 카드
+        mapView = findViewById(R.id.googleMapView)
+        mapView.onCreate(savedInstanceState)
+        setupMapView()
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
     }
 
     // ← 이거 추가
@@ -44,6 +60,27 @@ class HazardActivity : AppCompatActivity() {
             setupHazardCards()
             setupMapView()
         }
+        mapView.onResume()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        mapView.onPause()  // ✅ 필수
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        mapView.onDestroy()  // ✅ 필수
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        mapView.onSaveInstanceState(outState)  // ✅ 필수
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        mapView.onLowMemory()  // ✅ 필수
     }
 
     private fun setupHazardCards() {
@@ -100,7 +137,8 @@ class HazardActivity : AppCompatActivity() {
             }
 
             val border = View(this).apply {
-                layoutParams = LinearLayout.LayoutParams(6.dpToPx(), LinearLayout.LayoutParams.MATCH_PARENT)
+                layoutParams =
+                    LinearLayout.LayoutParams(6.dpToPx(), LinearLayout.LayoutParams.MATCH_PARENT)
                 setBackgroundColor(Color.parseColor(borderColor))
             }
 
@@ -160,13 +198,18 @@ class HazardActivity : AppCompatActivity() {
         btnTts.setOnClickListener {
             ttsEnabled = !ttsEnabled
             updateTtsButton(btnTts)
-            Toast.makeText(this, if (ttsEnabled) "음성 안내 켜짐" else "음성 안내 꺼짐", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, if (ttsEnabled) "음성 안내 켜짐" else "음성 안내 꺼짐", Toast.LENGTH_SHORT)
+                .show()
         }
 
         btnHaptic.setOnClickListener {
             hapticEnabled = !hapticEnabled
             updateHapticButton(btnHaptic)
-            Toast.makeText(this, if (hapticEnabled) "진동 피드백 켜짐" else "진동 피드백 꺼짐", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                this,
+                if (hapticEnabled) "진동 피드백 켜짐" else "진동 피드백 꺼짐",
+                Toast.LENGTH_SHORT
+            ).show()
         }
 
         updateTtsButton(btnTts)
@@ -175,21 +218,30 @@ class HazardActivity : AppCompatActivity() {
 
     private fun updateTtsButton(btn: ImageButton) {
         btn.setImageResource(if (ttsEnabled) R.drawable.ic_volume_on else R.drawable.ic_volume_off)
-        btn.imageTintList = ContextCompat.getColorStateList(this, if (ttsEnabled) R.color.md_primary else R.color.md_on_surface_variant)
+        btn.imageTintList = ContextCompat.getColorStateList(
+            this,
+            if (ttsEnabled) R.color.md_primary else R.color.md_on_surface_variant
+        )
         btn.alpha = if (ttsEnabled) 1f else 0.5f
     }
 
     private fun updateHapticButton(btn: ImageButton) {
         btn.setImageResource(if (hapticEnabled) R.drawable.ic_vibration_on else R.drawable.ic_vibration_off)
-        btn.imageTintList = ContextCompat.getColorStateList(this, if (hapticEnabled) R.color.md_primary else R.color.md_on_surface_variant)
+        btn.imageTintList = ContextCompat.getColorStateList(
+            this,
+            if (hapticEnabled) R.color.md_primary else R.color.md_on_surface_variant
+        )
         btn.alpha = if (hapticEnabled) 1f else 0.5f
     }
 
     private fun setupPulseDot() {
         val dot = findViewById<View>(R.id.pulseDot)
-        val scaleX = ObjectAnimator.ofFloat(dot, "scaleX", 1f, 1.4f, 1f).apply { repeatCount = ValueAnimator.INFINITE }
-        val scaleY = ObjectAnimator.ofFloat(dot, "scaleY", 1f, 1.4f, 1f).apply { repeatCount = ValueAnimator.INFINITE }
-        val alpha = ObjectAnimator.ofFloat(dot, "alpha", 1f, 0.4f, 1f).apply { repeatCount = ValueAnimator.INFINITE }
+        val scaleX = ObjectAnimator.ofFloat(dot, "scaleX", 1f, 1.4f, 1f)
+            .apply { repeatCount = ValueAnimator.INFINITE }
+        val scaleY = ObjectAnimator.ofFloat(dot, "scaleY", 1f, 1.4f, 1f)
+            .apply { repeatCount = ValueAnimator.INFINITE }
+        val alpha = ObjectAnimator.ofFloat(dot, "alpha", 1f, 0.4f, 1f)
+            .apply { repeatCount = ValueAnimator.INFINITE }
         AnimatorSet().apply {
             playTogether(scaleX, scaleY, alpha)
             duration = 1200
@@ -198,57 +250,118 @@ class HazardActivity : AppCompatActivity() {
         }
     }
 
+    private var googleMap: GoogleMap? = null
+
     private fun setupMapView() {
-        val mapView = findViewById<CustomMapView>(R.id.customMapView)
-        val detections = DetectionRepository.latestDetections
 
-        val pins = detections.mapIndexed { i, det ->
-            CustomMapView.HazardPin(
-                id = "$i",
-                label = det.className,
-                detail = "${"%.1f".format(det.depthM)}m 거리",
-                level = when {
-                    det.depthM in 0f..1.5f -> CustomMapView.HazardLevel.IMMEDIATE
-                    det.depthM in 1.5f..3f -> CustomMapView.HazardLevel.NEAR
-                    else -> CustomMapView.HazardLevel.AHEAD
-                },
-                relX = det.centerX - 0.5f,
-                relY = det.centerY - 0.5f
-            )
-        }
+        val mapView = findViewById<MapView>(R.id.googleMapView)
 
-        mapView.setPins(pins)
-        mapView.setOnPinTappedListener { pin ->
-            Toast.makeText(this, "${pin.label}: ${pin.detail}", Toast.LENGTH_LONG).show()
+        mapView.getMapAsync { map ->
+
+            googleMap = map
+
+            // 위치 권한 확인
+            if (
+                ActivityCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                    1001
+                )
+
+                return@getMapAsync
+            }
+
+            map.isMyLocationEnabled = true
+
+            fusedLocationClient.lastLocation
+                .addOnSuccessListener { location ->
+
+                    if (location != null) {
+
+                        val currentLatLng = LatLng(
+                            location.latitude,
+                            location.longitude
+                        )
+
+                        map.moveCamera(
+                            CameraUpdateFactory.newLatLngZoom(
+                                currentLatLng,
+                                17f
+                            )
+                        )
+
+                        // 위험 핀 추가
+                        val detections = DetectionRepository.latestDetections
+
+                        detections.forEach { det ->
+
+                            val pinLatLng = LatLng(
+                                currentLatLng.latitude + (det.centerY - 0.5f) * 0.001,
+                                currentLatLng.longitude + (det.centerX - 0.5f) * 0.001
+                            )
+
+                            val color = when {
+                                det.depthM <= 1.5f ->
+                                    BitmapDescriptorFactory.HUE_RED
+
+                                det.depthM <= 3f ->
+                                    BitmapDescriptorFactory.HUE_ORANGE
+
+                                else ->
+                                    BitmapDescriptorFactory.HUE_BLUE
+                            }
+
+                            map.addMarker(
+                                MarkerOptions()
+                                    .position(pinLatLng)
+                                    .title(det.className)
+                                    .snippet("${"%.1f".format(det.depthM)}m 거리")
+                                    .icon(
+                                        BitmapDescriptorFactory.defaultMarker(color)
+                                    )
+                            )
+                        }
+                    }
+                }
         }
 
         findViewById<View>(R.id.btnExpandMap).setOnClickListener {
-            Toast.makeText(this, "전체 지도 보기 (준비 중)", Toast.LENGTH_SHORT).show()
+
+            val intent = Intent(this, FullMapActivity::class.java)
+            startActivity(intent)
         }
     }
 
     private fun setupBottomNav() {
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottomNav)
-        bottomNav.selectedItemId = R.id.nav_hazard
+
+        // 먼저 선택 상태를 강제 지정 (딜레이 없이 즉시 반영)
+        bottomNav.menu.findItem(R.id.nav_hazard)?.isChecked = true
+
         bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
-                R.id.nav_hazard -> true
+                R.id.nav_hazard -> true  // 현재 화면
+
                 R.id.nav_vision -> {
-                    startActivity(Intent(this, VisionActivity::class.java).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                    })
-                    @Suppress("DEPRECATION")
+                    startActivity(Intent(this, VisionActivity::class.java))
                     overridePendingTransition(0, 0)
+                    finish()
                     true
                 }
+
                 R.id.nav_settings -> {
-                    startActivity(Intent(this, SettingsActivity::class.java).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                    })
-                    @Suppress("DEPRECATION")
+                    startActivity(Intent(this, SettingsActivity::class.java))
                     overridePendingTransition(0, 0)
+                    finish()
                     true
                 }
+
                 else -> false
             }
         }

@@ -264,23 +264,28 @@ class VisionActivity : AppCompatActivity() {
 
     private fun setupBottomNav() {
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottomNav)
-        bottomNav.selectedItemId = R.id.nav_vision
+
+        // 먼저 선택 상태를 강제 지정 (딜레이 없이 즉시 반영)
+        bottomNav.menu.findItem(R.id.nav_vision)?.isChecked = true
+
         bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
+                R.id.nav_vision -> true  // 현재 화면
+
                 R.id.nav_hazard -> {
-                    startActivity(Intent(this, HazardActivity::class.java).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                    })
-                    true
-                }
-                R.id.nav_vision -> true
-                R.id.nav_settings -> {
-                    startActivity(Intent(this, SettingsActivity::class.java).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                    })
+                    startActivity(Intent(this, HazardActivity::class.java))
                     overridePendingTransition(0, 0)
+                    finish()
                     true
                 }
+
+                R.id.nav_settings -> {
+                    startActivity(Intent(this, SettingsActivity::class.java))
+                    overridePendingTransition(0, 0)
+                    finish()
+                    true
+                }
+
                 else -> false
             }
         }

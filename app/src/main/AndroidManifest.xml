@@ -1,13 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- 권한 -->
     <uses-permission android:name="android.permission.VIBRATE" />
-    <uses-permission android:name="android.permission.CAMERA" />  <!-- 이거 추가 -->
+    <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- VIBRATE 중복 제거 -->
 
     <uses-feature
         android:name="android.hardware.camera"
@@ -18,6 +19,10 @@
         android:icon="@drawable/ic_launcher_playstore"
         android:label="Luminance"
         android:theme="@style/Theme.Luminance">
+
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyBx9C6XGGm3wiQxRtd-jbSy-fX-Ko3PzEw" />
 
         <activity android:name=".ui.settings.SettingsActivity" />
 
@@ -32,7 +37,7 @@
 
         <activity android:name=".MainActivity" />
         <activity android:name=".ui.hazard.HazardActivity" />
-
+        <activity android:name=".ui.hazard.FullMapActivity"/>
     </application>
 
 </manifest>

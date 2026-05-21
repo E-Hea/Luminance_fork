@@ -328,8 +328,8 @@
             </LinearLayout>
 
             <!-- HA-005: 커스텀 2D 지도 뷰 -->
-            <com.example.luminance.ui.hazard.CustomMapView
-                android:id="@+id/customMapView"
+            <com.google.android.gms.maps.MapView
+                android:id="@+id/googleMapView"
                 android:layout_width="match_parent"
                 android:layout_height="260dp"
                 android:layout_marginBottom="24dp" />
@@ -344,6 +344,8 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:background="#FFFFFF"
-        app:menu="@menu/bottom_nav_menu" />
+        app:menu="@menu/bottom_nav_menu"
+        app:itemIconTint="@color/bottom_nav_color"
+        app:itemTextColor="@color/bottom_nav_color"/>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

@@ -150,6 +150,7 @@
                     android:layout_height="56dp"
                     android:layout_weight="1"
                     android:text="느림"
+                    android:textColor="#414754"
                     android:textStyle="bold" />
 
                 <com.google.android.material.button.MaterialButton
@@ -159,6 +160,7 @@
                     android:layout_height="56dp"
                     android:layout_weight="1"
                     android:text="보통"
+                    android:textColor="#414754"
                     android:textStyle="bold" />
 
                 <com.google.android.material.button.MaterialButton
@@ -168,6 +170,7 @@
                     android:layout_height="56dp"
                     android:layout_weight="1"
                     android:text="빠름"
+                    android:textColor="#414754"
                     android:textStyle="bold" />
 
             </com.google.android.material.button.MaterialButtonToggleGroup>
@@ -271,6 +274,9 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:background="#F8F9FA"
-        app:menu="@menu/bottom_nav_menu" />
+        app:menu="@menu/bottom_nav_menu"
+        app:itemIconTint="@color/bottom_nav_color"
+        app:itemTextColor="@color/bottom_nav_color"/>
+
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

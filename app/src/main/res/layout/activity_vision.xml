@@ -132,7 +132,9 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:background="#CCFFFFFF"
-        app:menu="@menu/bottom_nav_menu" />
+        app:menu="@menu/bottom_nav_menu"
+        app:itemIconTint="@color/bottom_nav_color"
+        app:itemTextColor="@color/bottom_nav_color"/>
 
     <!--FAB 마이크-->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
