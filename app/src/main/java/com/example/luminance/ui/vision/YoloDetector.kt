@@ -15,8 +15,23 @@ class YoloDetector(context: Context) {
     private val confThreshold = 0.25f
 
     companion object {
-        var useARCore = false  // S22 연결 후 ARCore 구현 시 true로 변경
+        var useARCore = false
     }
+
+    private val classNameKo = mapOf(
+        "person" to "사람", "bicycle" to "자전거", "motorcycle" to "오토바이",
+        "scooter" to "킥보드", "wheelchair" to "휠체어", "carrier" to "카트",
+        "stroller" to "유모차", "movable_signage" to "이동식 간판", "dog" to "개",
+        "cat" to "고양이", "bus" to "버스", "car" to "자동차", "truck" to "트럭",
+        "bollard" to "볼라드", "barricade" to "바리케이드", "kiosk" to "키오스크",
+        "potted_plant" to "화분", "power_controller" to "전력함", "fire_hydrant" to "소화전",
+        "pole" to "기둥", "tree_trunk" to "나무", "traffic_light" to "신호등",
+        "traffic_light_controller" to "신호등 제어기", "traffic_sign" to "교통 표지판",
+        "parking_meter" to "주차 미터기", "stop" to "정지 표지판", "bench" to "벤치",
+        "chair" to "의자", "table" to "테이블",
+        "sidewalk" to "인도", "bike_lane" to "자전거 도로", "alley" to "골목",
+        "roadway" to "차도", "braille_guide_blocks" to "점자 블록", "caution_zone" to "주의 구역"
+    )
 
     private val obstacleClasses = listOf(
         "person", "bicycle", "motorcycle", "scooter", "wheelchair",
@@ -103,28 +118,28 @@ class YoloDetector(context: Context) {
 
             if (maxConf < confThreshold) continue
 
-            val top = (cy - h / 2f) / inputSize
-            val bottom = (cy + h / 2f) / inputSize
-            val bboxHeight = bottom - top
+            val top = cy - h / 2f
+            val bottom = cy + h / 2f
+            val bboxHeight = bottom - top  // ← 수정
 
             val depthM = if (useARCore) {
-                -1f  // ARCore에서 채워짐
+                -1f
             } else {
                 when {
-                    bboxHeight > 0.5f -> 1.0f
-                    bboxHeight > 0.3f -> 2.0f
-                    bboxHeight > 0.1f -> 4.0f
+                    bboxHeight > 0.5f -> 1.0f  // ← 수정
+                    bboxHeight > 0.3f -> 2.0f  // ← 수정
+                    bboxHeight > 0.1f -> 4.0f  // ← 수정
                     else -> 8.0f
                 }
             }
 
             results.add(
                 DetectionResult(
-                    className = classList[maxIdx],
+                    className = classNameKo[classList[maxIdx]] ?: classList[maxIdx],
                     confidence = maxConf,
-                    left = (cx - w / 2f) / inputSize,
+                    left = (cx - w / 2f) ,
                     top = top,
-                    right = (cx + w / 2f) / inputSize,
+                    right = (cx + w / 2f) ,
                     bottom = bottom,
                     depthM = depthM
                 )

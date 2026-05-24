@@ -21,9 +21,15 @@ import com.example.luminance.R
 import com.example.luminance.databinding.ActivityVisionBinding
 import com.example.luminance.ui.hazard.HazardActivity
 import com.example.luminance.ui.settings.SettingsActivity
+import com.google.android.gms.common.ConnectionResult
+import com.google.android.gms.common.GoogleApiAvailability
+import com.google.ar.core.ArCoreApk
+import com.google.ar.core.Config
+import com.google.ar.core.Session
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import java.util.Locale
 import java.util.concurrent.Executors
+import com.example.luminance.BuildConfig
 
 class VisionActivity : AppCompatActivity() {
 
@@ -39,6 +45,10 @@ class VisionActivity : AppCompatActivity() {
     private val VIBRATION_COOLDOWN_MS = 3000L
     private var isCameraStarted = false
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    // ARCore
+    private var arSession: Session? = null
+    private var arCoreAvailable = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,20 +68,63 @@ class VisionActivity : AppCompatActivity() {
         }
 
         detector = YoloDetector(this)
+        initARCore()
+    }
+
+    private fun initARCore() {
+        try {
+            val availability = ArCoreApk.getInstance().checkAvailability(this)
+            if (availability.isSupported) {
+                arSession = Session(this).also { session ->
+                    val config = Config(session).apply {
+                        depthMode = Config.DepthMode.AUTOMATIC
+                    }
+                    if (session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)) {
+                        session.configure(config)
+                        arCoreAvailable = true
+                        YoloDetector.useARCore = true
+                        android.util.Log.d("LUMINANCE", "ARCore Depth 사용 가능!")
+                    } else {
+                        android.util.Log.d("LUMINANCE", "Depth 모드 미지원 기기")
+                    }
+                }
+            } else {
+                android.util.Log.d("LUMINANCE", "ARCore 미지원 기기")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("LUMINANCE", "ARCore 초기화 실패: ${e.message}")
+            arCoreAvailable = false
+        }
+    }
+
+    private fun getDepthFromARCore(x: Float, y: Float): Float {
+        val session = arSession ?: return -1f
+        return try {
+            session.resume()
+            val frame = session.update()
+            val depthImage = frame.acquireDepthImage16Bits()
+            val imgW = depthImage.width
+            val imgH = depthImage.height
+            val px = (x * imgW).toInt().coerceIn(0, imgW - 1)
+            val py = (y * imgH).toInt().coerceIn(0, imgH - 1)
+            val buffer = depthImage.planes[0].buffer
+            val depthMm = buffer.getShort((py * imgW + px) * 2).toInt() and 0xFFFF
+            depthImage.close()
+            depthMm / 1000f  // mm → m 변환
+        } catch (e: Exception) {
+            -1f
+        }
     }
 
     private fun checkAndRequestPermissions() {
         val denied = permissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-
         if (denied.isEmpty()) {
             setupCamera()
             return
         }
-
         val needsRationale = denied.any { shouldShowRequestPermissionRationale(it) }
-
         if (needsRationale) {
             AlertDialog.Builder(this)
                 .setTitle("권한이 필요합니다")
@@ -100,18 +153,15 @@ class VisionActivity : AppCompatActivity() {
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
             val denied = result.filterValues { !it }.keys
-
             if (denied.isEmpty()) {
                 setupCamera()
                 return@registerForActivityResult
             }
-
             if (Manifest.permission.CAMERA in denied) {
                 updateGuidanceText("카메라 권한이 없어 감지 기능을 사용할 수 없습니다.")
             } else {
                 setupCamera()
             }
-
             val permanentlyDenied = denied.filter { !shouldShowRequestPermissionRationale(it) }
             if (permanentlyDenied.isNotEmpty()) {
                 showGoToSettingsDialog(permanentlyDenied.toSet())
@@ -142,11 +192,9 @@ class VisionActivity : AppCompatActivity() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
-
             val preview = Preview.Builder().build().also {
                 it.setSurfaceProvider(binding.cameraPreview.surfaceProvider)
             }
-
             val imageAnalysis = ImageAnalysis.Builder()
                 .setTargetResolution(Size(640, 480))
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
@@ -160,7 +208,6 @@ class VisionActivity : AppCompatActivity() {
                     imageProxy.close()
                 }
             }
-
             cameraProvider.bindToLifecycle(
                 this,
                 CameraSelector.DEFAULT_BACK_CAMERA,
@@ -172,10 +219,18 @@ class VisionActivity : AppCompatActivity() {
 
     private fun processFrame(imageProxy: ImageProxy) {
         android.util.Log.d("LUMINANCE", "processFrame 호출됨 - ${imageProxy.width}x${imageProxy.height}")
-
         try {
             val bitmap = imageProxy.toBitmap()
-            val detections = detector.detect(bitmap)
+            var detections = detector.detect(bitmap)
+
+            // ARCore로 각 탐지 객체 거리 측정
+            if (arCoreAvailable) {
+                detections = detections.map { det ->
+                    val depthM = getDepthFromARCore(det.centerX, det.centerY)
+                    if (depthM > 0) det.copy(depthM = depthM) else det
+                }
+            }
+
             android.util.Log.d("LUMINANCE", "탐지 결과: ${detections.size}개")
 
             DetectionRepository.detections.postValue(detections)
@@ -193,45 +248,36 @@ class VisionActivity : AppCompatActivity() {
         }
     }
 
-    // 진동 패턴: 즉시대응=3회, 가까움=2회, 전방=1회
     private fun vibrateForHazard(detections: List<DetectionResult>) {
         if (detections.isEmpty()) return
-
         val now = System.currentTimeMillis()
         if (now - lastVibrationTime < VIBRATION_COOLDOWN_MS) return
-
         val top = detections.minByOrNull { it.depthM } ?: return
-
         val pattern = when {
-            top.depthM < 1.5f -> longArrayOf(0, 200, 100, 200, 100, 200)  // 즉시대응: 3회
-            top.depthM < 3.0f -> longArrayOf(0, 200, 100, 200)             // 가까움: 2회
-            else -> longArrayOf(0, 200)                                      // 전방: 1회
+            top.depthM < 1.5f -> longArrayOf(0, 200, 100, 200, 100, 200)
+            top.depthM < 3.0f -> longArrayOf(0, 200, 100, 200)
+            else -> longArrayOf(0, 200)
         }
-
         vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
         lastVibrationTime = now
     }
 
     private fun speakTopHazard(detections: List<DetectionResult>) {
         if (detections.isEmpty()) return
-
         val now = System.currentTimeMillis()
         if (now - lastSpokenTime < TTS_COOLDOWN_MS) return
-
         val top = detections.minByOrNull { it.depthM } ?: return
-
         val direction = when {
             top.centerX < 0.33f -> "왼쪽"
             top.centerX > 0.66f -> "오른쪽"
             else -> "전방"
         }
-
         val sentence = when {
-            top.depthM < 1.5f -> "${direction}에 ${top.className} 있습니다. 즉시 주의하세요."
-            top.depthM < 3.0f -> "${direction}에서 ${top.className}이 접근 중입니다."
+            top.depthM in 0f..1.5f -> "${direction}에 ${top.className} 있습니다. 즉시 주의하세요."
+            top.depthM in 1.5f..3f -> "${direction}에서 ${top.className}이 접근 중입니다."
+            top.depthM > 0 -> "전방에 ${top.className} 있습니다."
             else -> "전방에 ${top.className} 있습니다."
         }
-
         tts.speak(sentence, TextToSpeech.QUEUE_FLUSH, null, null)
         lastSpokenTime = now
         updateGuidanceText(sentence)
@@ -244,6 +290,7 @@ class VisionActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        try { arSession?.resume() } catch (e: Exception) { }
         if (!isCameraStarted &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
             == PackageManager.PERMISSION_GRANTED) {
@@ -253,39 +300,34 @@ class VisionActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        handler.removeCallbacks(handler.toString().let { { } })
+        try { arSession?.pause() } catch (e: Exception) { }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         tts.shutdown()
         inferenceExecutor.shutdown()
+        arSession?.close()
     }
 
     private fun setupBottomNav() {
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottomNav)
-
-        // 먼저 선택 상태를 강제 지정 (딜레이 없이 즉시 반영)
         bottomNav.menu.findItem(R.id.nav_vision)?.isChecked = true
-
         bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
-                R.id.nav_vision -> true  // 현재 화면
-
+                R.id.nav_vision -> true
                 R.id.nav_hazard -> {
                     startActivity(Intent(this, HazardActivity::class.java))
                     overridePendingTransition(0, 0)
                     finish()
                     true
                 }
-
                 R.id.nav_settings -> {
                     startActivity(Intent(this, SettingsActivity::class.java))
                     overridePendingTransition(0, 0)
                     finish()
                     true
                 }
-
                 else -> false
             }
         }
@@ -323,31 +365,65 @@ class VisionActivity : AppCompatActivity() {
     private fun handleVoiceCommand(command: String) {
         android.util.Log.d("LUMINANCE", "음성 명령: $command")
         val detections = DetectionRepository.latestDetections
-        val response = when {
-            command.contains("뭐") || command.contains("무엇") || command.contains("있") -> {
-                if (detections.isEmpty()) "주변에 탐지된 위험 요소가 없습니다."
-                else {
-                    val top = detections.minByOrNull { it.depthM }!!
-                    val direction = when {
-                        top.centerX < 0.33f -> "왼쪽"
-                        top.centerX > 0.66f -> "오른쪽"
-                        else -> "전방"
-                    }
-                    "$direction 에 ${top.className} 있습니다. 거리는 약 ${"%.1f".format(top.depthM)}미터입니다."
+
+        val detectionContext = if (detections.isEmpty()) {
+            "현재 탐지된 객체 없음"
+        } else {
+            detections.take(5).joinToString(", ") {
+                val dir = when {
+                    it.centerX < 0.33f -> "왼쪽"
+                    it.centerX > 0.66f -> "오른쪽"
+                    else -> "전방"
+                }
+                "${it.className}(${dir}, ${"%.1f".format(it.depthM)}m)"
+            }
+        }
+
+        val prompt = """
+        당신은 시각장애인을 돕는 AI 보조기입니다.
+        현재 카메라로 탐지된 주변 상황: $detectionContext
+        사용자 질문: $command
+        짧고 명확하게 한국어로 답변하세요. 2문장 이내로.
+    """.trimIndent()
+
+        android.os.AsyncTask.execute {
+            try {
+                val url = java.net.URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${BuildConfig.GEMINI_API_KEY}")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.doOutput = true
+
+                val body = """
+                {
+                  "contents": [{"parts": [{"text": "$prompt"}]}]
+                }
+            """.trimIndent()
+
+                conn.outputStream.write(body.toByteArray())
+
+                val response = conn.inputStream.bufferedReader().readText()
+                val json = org.json.JSONObject(response)
+                val answer = json
+                    .getJSONArray("candidates")
+                    .getJSONObject(0)
+                    .getJSONObject("content")
+                    .getJSONArray("parts")
+                    .getJSONObject(0)
+                    .getString("text")
+
+                runOnUiThread {
+                    tts.speak(answer, TextToSpeech.QUEUE_FLUSH, null, null)
+                    updateGuidanceText(answer)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("LUMINANCE", "Gemini 오류: ${e.message}")
+                runOnUiThread {
+                    updateGuidanceText("AI 응답 오류가 발생했습니다.")
                 }
             }
-            command.contains("위험") -> {
-                if (detections.isEmpty()) "현재 위험 요소가 없습니다."
-                else "${detections.size}개의 위험 요소가 탐지되었습니다."
-            }
-            command.contains("안전") -> "현재 전방을 분석 중입니다. 주의하며 이동하세요."
-            command.contains("멈춰") || command.contains("정지") -> "정지합니다. 주변을 확인하세요."
-            else -> "죄송합니다. 다시 말씀해 주세요."
         }
-        tts.speak(response, TextToSpeech.QUEUE_FLUSH, null, null)
-        updateGuidanceText(response)
     }
-
 
     private val permissions = arrayOf(
         Manifest.permission.CAMERA,
