@@ -63,10 +63,10 @@ class DetectionOverlayView @JvmOverloads constructor(
         val scaleY = height.toFloat() / imageHeight
 
         for (det in detections) {
-            val left   = det.left   * imageWidth  * scaleX
-            val top    = det.top    * imageHeight * scaleY
-            val right  = det.right  * imageWidth  * scaleX
-            val bottom = det.bottom * imageHeight * scaleY
+            val left   = det.left   * width
+            val top    = det.top    * height
+            val right  = det.right  * width
+            val bottom = det.bottom * height
 
             val paint = when {
                 det.depthM in 0f..1.5f -> paintImmediate
