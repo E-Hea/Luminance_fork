@@ -19,8 +19,8 @@ android {
             useSupportLibrary = true
         }
 
-        manifestPlaceholders["MAPS_API_KEY"] =
-            properties["MAPS_API_KEY"] ?: ""
+        manifestPlaceholders["MAPS_API_KEY"] = properties["MAPS_API_KEY"] ?: ""
+        buildConfigField("String", "GEMINI_API_KEY", "\"${properties["GEMINI_API_KEY"]}\"")
     }
 
     buildFeatures {
@@ -82,6 +82,8 @@ dependencies {
     implementation("androidx.camera:camera-view:1.3.4")
     implementation("com.google.android.gms:play-services-maps:18.2.0")
     implementation("com.google.android.gms:play-services-location:21.0.1")
+    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     //은혜 추가
     dependencies {
         // 기존 코드 유지하고 아래만 추가
