@@ -1,7 +1,12 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
 }
+
+val properties = Properties()
+properties.load(project.rootProject.file("local.properties").inputStream())
 
 android {
     namespace = "com.example.luminance"
@@ -85,19 +90,14 @@ dependencies {
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     //은혜 추가
-    dependencies {
-        // 기존 코드 유지하고 아래만 추가
+    implementation("androidx.camera:camera-camera2:1.3.4")
+    implementation("androidx.camera:camera-lifecycle:1.3.4")
+    implementation("androidx.camera:camera-view:1.3.4")
 
-        // CameraX
-        implementation("androidx.camera:camera-camera2:1.3.4")
-        implementation("androidx.camera:camera-lifecycle:1.3.4")
-        implementation("androidx.camera:camera-view:1.3.4")
+    // TFLite
+    implementation("org.tensorflow:tensorflow-lite:2.13.0")
+    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
 
-        // TFLite
-        implementation("org.tensorflow:tensorflow-lite:2.13.0")
-        implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
-
-        // ARCore
-        implementation("com.google.ar:core:1.40.0")
-    }
+    // ARCore
+    implementation("com.google.ar:core:1.40.0")
 }
