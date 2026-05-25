@@ -1,12 +1,18 @@
 import java.util.Properties
 
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
+}
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
 }
 
-val properties = Properties()
-properties.load(project.rootProject.file("local.properties").inputStream())
+//val properties = Properties()
+//properties.load(project.rootProject.file("local.properties").inputStream())
 
 android {
     namespace = "com.example.luminance"

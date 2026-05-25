@@ -70,6 +70,7 @@ class VisionActivity : AppCompatActivity() {
 
         detector = YoloDetector(this)
         initARCore()
+        android.util.Log.d("LUMINANCE", "API KEY: ${BuildConfig.GEMINI_API_KEY}")  // ← 여기
     }
 
     private fun initARCore() {
@@ -391,7 +392,7 @@ class VisionActivity : AppCompatActivity() {
             var conn: java.net.HttpURLConnection? = null
             try {
                 Log.d("KEY_TEST", BuildConfig.GEMINI_API_KEY)
-                val url = java.net.URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${BuildConfig.GEMINI_API_KEY}")
+                val url = java.net.URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${BuildConfig.GEMINI_API_KEY}")
                 conn = url.openConnection() as java.net.HttpURLConnection
                 conn.requestMethod = "POST"
                 conn.setRequestProperty("Content-Type", "application/json")
