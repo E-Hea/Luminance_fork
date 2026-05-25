@@ -392,7 +392,7 @@ class VisionActivity : AppCompatActivity() {
             var conn: java.net.HttpURLConnection? = null
             try {
                 Log.d("KEY_TEST", BuildConfig.GEMINI_API_KEY)
-                val url = java.net.URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${BuildConfig.GEMINI_API_KEY}")
+                val url = java.net.URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AIzaSyChkYNfYQpdcmHr36Ho26KH_n1jvM1kLl0970214")
                 conn = url.openConnection() as java.net.HttpURLConnection
                 conn.requestMethod = "POST"
                 conn.setRequestProperty("Content-Type", "application/json")
