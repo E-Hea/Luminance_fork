@@ -387,40 +387,49 @@ class VisionActivity : AppCompatActivity() {
     """.trimIndent()
 
         android.os.AsyncTask.execute {
+            var conn: java.net.HttpURLConnection? = null
             try {
                 val url = java.net.URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${BuildConfig.GEMINI_API_KEY}")
-                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn = url.openConnection() as java.net.HttpURLConnection
                 conn.requestMethod = "POST"
                 conn.setRequestProperty("Content-Type", "application/json")
                 conn.doOutput = true
 
-                val body = """
-                {
-                  "contents": [{"parts": [{"text": "$prompt"}]}]
-                }
-            """.trimIndent()
-
+                val body = """{"contents": [{"parts": [{"text": "${prompt.replace("\"", "\\\"")}"}]}]}"""
                 conn.outputStream.write(body.toByteArray())
 
-                val response = conn.inputStream.bufferedReader().readText()
-                val json = org.json.JSONObject(response)
-                val answer = json
-                    .getJSONArray("candidates")
-                    .getJSONObject(0)
-                    .getJSONObject("content")
-                    .getJSONArray("parts")
-                    .getJSONObject(0)
-                    .getString("text")
+                val responseCode = conn.responseCode
+                android.util.Log.d("LUMINANCE", "Gemini 응답코드: $responseCode")
 
-                runOnUiThread {
-                    tts.speak(answer, TextToSpeech.QUEUE_FLUSH, null, null)
-                    updateGuidanceText(answer)
+                if (responseCode == 200) {
+                    val response = conn.inputStream.bufferedReader().readText()
+                    val json = org.json.JSONObject(response)
+                    val answer = json
+                        .getJSONArray("candidates")
+                        .getJSONObject(0)
+                        .getJSONObject("content")
+                        .getJSONArray("parts")
+                        .getJSONObject(0)
+                        .getString("text")
+
+                    runOnUiThread {
+                        tts.speak(answer, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, null)
+                        updateGuidanceText(answer)
+                    }
+                } else {
+                    val errorBody = conn.errorStream?.bufferedReader()?.readText() ?: "에러 없음"
+                    android.util.Log.e("LUMINANCE", "Gemini 에러 응답($responseCode): $errorBody")
+                    runOnUiThread {
+                        updateGuidanceText("AI 응답 오류: $responseCode")
+                    }
                 }
             } catch (e: Exception) {
-                android.util.Log.e("LUMINANCE", "Gemini 오류: ${e.message}")
+                android.util.Log.e("LUMINANCE", "Gemini 오류: ${e.message}", e)
                 runOnUiThread {
                     updateGuidanceText("AI 응답 오류가 발생했습니다.")
                 }
+            } finally {
+                conn?.disconnect()
             }
         }
     }
