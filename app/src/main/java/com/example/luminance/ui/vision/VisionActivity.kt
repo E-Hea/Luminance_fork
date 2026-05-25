@@ -9,6 +9,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.Settings
 import android.speech.tts.TextToSpeech
+import android.util.Log
 import android.util.Size
 import android.view.LayoutInflater
 import androidx.activity.result.contract.ActivityResultContracts
@@ -389,6 +390,7 @@ class VisionActivity : AppCompatActivity() {
         android.os.AsyncTask.execute {
             var conn: java.net.HttpURLConnection? = null
             try {
+                Log.d("KEY_TEST", BuildConfig.GEMINI_API_KEY)
                 val url = java.net.URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${BuildConfig.GEMINI_API_KEY}")
                 conn = url.openConnection() as java.net.HttpURLConnection
                 conn.requestMethod = "POST"
